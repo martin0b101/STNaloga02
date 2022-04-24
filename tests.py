@@ -192,6 +192,18 @@ class ServerTest(unittest.TestCase):
         self.assertTrue(response.startswith("HTTP/1.1 400"))
 
 
+    def test_get_root_index_url_www_data(self):
+
+
+        response = urlopen(self.server + "/www-data/index.html")
+        headers = dict(response.headers.items())
+        print(headers)
+        self.assertEqual(response.getcode(), 200)
+        #self.assertEqual(headers["content-type"], "text/html")
+        #html = response.read().decode("utf-8")
+        #self.assertNotEqual(html.lower().find("to-do"), -1)
+
+
 if __name__ == '__main__':
     if len(sys.argv) == 2:
         test_db = ServerTest()

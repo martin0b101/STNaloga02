@@ -129,24 +129,6 @@ def read_from_db(criteria=None):
         return []
 
 
-def parse_headers_post(client):
-    headers = dict()
-    while True:
-        line = client.readline().decode("utf-8").strip()
-        if line == "":
-            try:
-                data = client.readline().decode("utf-8").strip()
-            except:
-                print("nih dela")
-            #print(data)
-            #headers["data"] = data
-            return headers
-        if not line:
-            return headers
-
-        key, value = line.split(":", 1)
-        headers[key.strip()] = value.strip()
-
 
 def parse_headers(client):
     headers = dict()
@@ -160,23 +142,50 @@ def parse_headers(client):
         headers[key.strip()] = value.strip()
 
 
+# get post parametre
+def get_post_parameters(client,headers):
+    parametri = client.read(int(headers.get("Content-Length")))
+    user = parametri.decode("utf-8")
+    user = user.split("&")
+    name = user[0].split("=")[1]
+    last_name = user[1].split("=")[1]
+    #print("User is:", name, " last name: ", last_name)
+    return name, last_name
+
+
+#if get /index.html
+def check_if_just_index(uri):
+    if uri[1:] == "index.html":
+        return "/www-data/index.html"
+
+
 def process_request(connection, address):
     """Process an incoming socket request.
 
     :param connection is a socket of the client
     :param address is a 2-tuple (address(str), port(int)) of the client
     """
-
-
-
     wrongMethod = False
 
     # Read and parse the request line
     client = connection.makefile("wrb")
+    clientForDate = client
     # Read and parse headers
     line = client.readline().decode("utf-8").strip()
     try:
         method, uri, version = line.split()
+
+        # check uri
+        uri_razclenjen = uri.split("/")
+        if len(uri_razclenjen) == 2:
+            if isfile('./www-data/'+uri_razclenjen[1]):
+                uri = "/www-data/" + uri_razclenjen[1]
+
+        # check if index exist
+        if uri[-1] == "/":
+            path = uri
+            uri = path+"/index.html"
+
         assert method == "GET" or method == "POST", "Nedela"
         #check if method is get or post
 
@@ -189,10 +198,18 @@ def process_request(connection, address):
         assert len(uri) > 0 and uri[0] == "/", "Invalid request URI"
         assert version == "HTTP/1.1", "Invalid HTTP version"
 
-        # check if method is post get data
+
+
+
 
         headers = parse_headers(client)
+
+        # vemo da mamo nek parameter
+        if "?" in uri:
+            # napisi metodo ko ki vrne vrednosti v listu
+            print(unquote_plus(urlparse(uri)[4]).split("&"))
         print(method, uri, version, headers)
+
 
         # check if last is app-add
         app_add = uri[-7:] == "app-add"
@@ -203,8 +220,15 @@ def process_request(connection, address):
         if app_index:
             uri = uri[:-9] + "app_list.html"
 
+        # get post parametre
+        if method == "POST":
+            name, last_name = get_post_parameters(client, headers)
+
+
         with open(uri[1:], "rb") as handle:
             body = handle.read()
+
+
 
 
         head = HEADER_RESPONSE_200 % (
