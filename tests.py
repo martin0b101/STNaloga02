@@ -170,6 +170,7 @@ class ServerTest(unittest.TestCase):
         """Return code 200 when a GET request is made to /index.html (urlopen)"""
         response = urlopen(self.server + "/index.html")
         headers = dict(response.headers.items())
+        print("response code:", response.getcode())
         self.assertEqual(response.getcode(), 200)
         self.assertEqual(headers["content-type"], "text/html")
         html = response.read().decode("utf-8")

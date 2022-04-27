@@ -5,7 +5,7 @@ import pickle
 import socket
 from os import listdir
 from os.path import isdir, isfile, join
-from urllib.parse import unquote_plus, urlparse
+from urllib.parse import unquote_plus
 
 # Pickle file for storing data
 PICKLE_DB = "db.pkl"
@@ -143,7 +143,7 @@ def parse_headers(client):
 
 
 # get post parametre
-def get_post_parameters(client,headers):
+def get_post_parameters(client, headers):
     parametri = client.read(int(headers.get("Content-Length")))
     user = parametri.decode("utf-8")
     user = user.split("&")
@@ -159,6 +159,27 @@ def check_if_just_index(uri):
         return "/www-data/index.html"
 
 
+def write_to_table(filter_by_this):
+    table = ""
+    students = read_from_db(filter_by_this)
+    for i in range(0, len(students)):
+        add_this = [students[i]['number'], students[i]['first'], students[i]['last']]
+        table += (TABLE_ROW % (add_this[0], add_this[1], add_this[2]))
+    return table
+
+
+def get_search_parameters(uri):
+    parameters = dict()
+    list_search_parameters = unquote_plus(uri).split("?")
+    list_search_parameters = list_search_parameters[1].split("&")
+    for paramter in list_search_parameters:
+        list_paramter = paramter.split("=")
+        parameters[list_paramter[0]] = list_paramter[1]
+
+    return parameters
+
+
+
 def process_request(connection, address):
     """Process an incoming socket request.
 
@@ -166,6 +187,7 @@ def process_request(connection, address):
     :param address is a 2-tuple (address(str), port(int)) of the client
     """
     wrongMethod = False
+    filter_by_this = dict()
 
     # Read and parse the request line
     client = connection.makefile("wrb")
@@ -175,8 +197,16 @@ def process_request(connection, address):
     try:
         method, uri, version = line.split()
 
+        assert method == "GET" or method == "POST", "Invalid method"
+
+        # parse uri
+
+        uri = "/www-data"+uri
         # check uri
         uri_razclenjen = uri.split("/")
+        # serviraj json file
+
+
         if len(uri_razclenjen) == 2:
             if isfile('./www-data/'+uri_razclenjen[1]):
                 uri = "/www-data/" + uri_razclenjen[1]
@@ -186,7 +216,7 @@ def process_request(connection, address):
             path = uri
             uri = path+"/index.html"
 
-        assert method == "GET" or method == "POST", "Nedela"
+
         #check if method is get or post
 
         checkMetod = method.replace(" ", "")
@@ -198,19 +228,21 @@ def process_request(connection, address):
         assert len(uri) > 0 and uri[0] == "/", "Invalid request URI"
         assert version == "HTTP/1.1", "Invalid HTTP version"
 
-
-
-
-
         headers = parse_headers(client)
 
         # vemo da mamo nek parameter
         if "?" in uri:
-            # napisi metodo ko ki vrne vrednosti v listu
-            print(unquote_plus(urlparse(uri)[4]).split("&"))
+            # dobi iskane filtre
+            filter_by_this = get_search_parameters(uri)
+            # shrani iskane filtre
+            #filter_by_this = {"number": number, "first": first_name, "last": last_name}
+            # uri je samo prej ? drugace nenajde fila
+            uri = uri.split("?")[0]
+
+
         print(method, uri, version, headers)
 
-
+        #popravi da dela skos ne zam na zadnjih 7 mest
         # check if last is app-add
         app_add = uri[-7:] == "app-add"
         if app_add:
@@ -223,22 +255,27 @@ def process_request(connection, address):
         # get post parametre
         if method == "POST":
             name, last_name = get_post_parameters(client, headers)
+            if name != "" and last_name != '':
+                save_to_db(name, last_name)
 
 
         with open(uri[1:], "rb") as handle:
             body = handle.read()
+            students = write_to_table(filter_by_this)
+            body = body.replace(bytes("{{students}}", encoding="utf-8"), bytes(students, encoding="utf-8"))
 
 
 
 
         head = HEADER_RESPONSE_200 % (
-            # "text/html",
             mimetypes.guess_type(uri[1:])[0],
             len(body)
         )
         client.write(head.encode("utf-8"))
         client.write(body)
 
+    except AssertionError:
+        client.write(RESPONSE405.encode('utf-8'))
     except (ValueError, AssertionError) as e:
         print("Invalid request %s (%s)" % (line, e))
     except IOError:
